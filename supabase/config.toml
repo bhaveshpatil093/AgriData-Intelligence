@@ -1,1 +1,10 @@
 project_id = "ppaexumvcibkzltxlmqd"
+
+[auth]
+enable_signup = true
+
+[functions.query-data]
+verify_jwt = false
+
+[functions.seed-datasets]
+verify_jwt = false
