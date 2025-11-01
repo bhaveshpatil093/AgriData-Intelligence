@@ -55,8 +55,14 @@ export const MessageBubble = ({ message }: MessageBubbleProps) => {
         )}
 
         {message.visualizations && (
-          <div className="w-full mt-1">
-            <DataVisualization data={message.visualizations} />
+          <div className="w-full mt-1 space-y-4">
+            {Array.isArray(message.visualizations) ? (
+              message.visualizations.map((viz, index) => (
+                <DataVisualization key={index} data={viz} />
+              ))
+            ) : (
+              <DataVisualization data={message.visualizations} />
+            )}
           </div>
         )}
       </div>

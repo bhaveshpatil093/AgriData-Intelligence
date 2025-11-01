@@ -119,6 +119,8 @@ CRITICAL INSTRUCTIONS:
    - Use "table" for detailed data listings
    - Include proper titles and labels
    - Ensure data arrays are properly formatted
+   - CRITICAL: visualizations must be a SINGLE object, NOT an array
+   - The data array must contain objects with the keys you want to display
 
 5. ALWAYS include citations. Format: {"dataset": "Dataset Name", "source": "State: X, District: Y, Year: Z, Crop: W"}
 
@@ -133,18 +135,29 @@ RESPONSE FORMAT (return ONLY this JSON structure):
   "visualizations": {
     "type": "bar|line|table",
     "title": "Descriptive chart title",
-    "data": [{"key": "value", ...}],
-    "xKey": "field name for x-axis",
-    "yKey": "field name for y-axis (for single series)",
-    "series": ["series1", "series2"] // for multiple series charts
+    "data": [
+      {"State": "Maharashtra", "Average_Annual_Rainfall_mm": 643.75},
+      {"State": "Punjab", "Average_Annual_Rainfall_mm": 705.08}
+    ],
+    "xKey": "State",
+    "yKey": "Average_Annual_Rainfall_mm",
+    "series": [] // optional: for multiple series like ["Value1", "Value2"]
   }
 }
 
-If no visualization is needed, set visualizations to null.`;
+IMPORTANT VISUALIZATION RULES:
+- visualizations can be a SINGLE object OR an array of objects
+- If you have multiple visualizations, use an array: [{"type": "bar", ...}, {"type": "table", ...}]
+- The "data" array must contain objects where each object is a data point
+- For bar charts comparing states, use: {"data": [{"State": "Name", "Value": number}, ...], "xKey": "State", "yKey": "Value"}
+- For line charts over time, use: {"data": [{"Year": 2018, "Value": number}, ...], "xKey": "Year", "yKey": "Value"}
+- If no visualization is needed, set visualizations to null (not an empty object or array)
+
+CRITICAL: Your response MUST be valid JSON. Do NOT include any text before or after the JSON object. Start with { and end with }.`;
 
     const userPrompt = `User question: "${question}"
 
-Analyze the datasets and provide your response as valid JSON only (no markdown, no code blocks, just the JSON object).`;
+Analyze the datasets and provide your response as valid JSON only (no markdown, no code blocks, no explanatory text, just the JSON object starting with { and ending with }).`;
 
     const geminiResponse = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
@@ -181,12 +194,36 @@ Analyze the datasets and provide your response as valid JSON only (no markdown, 
     }
 
     const geminiData = await geminiResponse.json();
-    console.log("Gemini response:", JSON.stringify(geminiData, null, 2));
-
-    let responseText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    console.log("Gemini response status:", geminiResponse.status);
+    console.log("Gemini response keys:", Object.keys(geminiData));
     
-    if (!responseText) {
-      throw new Error("No response received from Gemini API");
+    // Check for API errors in response
+    if (geminiData.error) {
+      console.error("Gemini API returned an error:", geminiData.error);
+      throw new Error(`Gemini API error: ${geminiData.error.message || JSON.stringify(geminiData.error)}`);
+    }
+    
+    if (!geminiData.candidates || geminiData.candidates.length === 0) {
+      console.error("No candidates in Gemini response:", JSON.stringify(geminiData, null, 2));
+      throw new Error("No response candidates from Gemini API");
+    }
+
+    let responseText = geminiData.candidates[0]?.content?.parts?.[0]?.text || "";
+    
+    if (!responseText || responseText.trim().length === 0) {
+      console.error("Empty response from Gemini API. Full response:", JSON.stringify(geminiData, null, 2));
+      
+      // Return a helpful error message instead of throwing
+      return new Response(
+        JSON.stringify({
+          answer: "I apologize, but I didn't receive a valid response from the AI service. Please try rephrasing your question or ask something else.",
+          citations: [],
+          visualizations: null,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
     
     // Clean up markdown code blocks and whitespace
@@ -198,9 +235,19 @@ Analyze the datasets and provide your response as valid JSON only (no markdown, 
       .trim();
     
     // Try to extract JSON if there's surrounding text
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      responseText = jsonMatch[0];
+    // Look for the largest JSON object in the response
+    const jsonMatches = responseText.match(/\{[\s\S]*\}/g);
+    if (jsonMatches && jsonMatches.length > 0) {
+      // Use the longest match (most likely to be the complete JSON)
+      responseText = jsonMatches.reduce((a, b) => a.length > b.length ? a : b);
+    }
+    
+    // If no JSON object found, try array format
+    if (!responseText.startsWith('{')) {
+      const arrayMatch = responseText.match(/\[[\s\S]*\]/);
+      if (arrayMatch) {
+        responseText = arrayMatch[0];
+      }
     }
     
     let parsedResponse;
@@ -214,17 +261,58 @@ Analyze the datasets and provide your response as valid JSON only (no markdown, 
       if (!parsedResponse.citations || !Array.isArray(parsedResponse.citations)) {
         parsedResponse.citations = [];
       }
-      if (!parsedResponse.visualizations) {
+      
+      // Normalize visualizations - handle both array and object formats
+      if (parsedResponse.visualizations) {
+        // If it's an array, validate and keep all valid visualizations
+        if (Array.isArray(parsedResponse.visualizations)) {
+          const validVizs = parsedResponse.visualizations.filter((viz: any) => 
+            viz && 
+            typeof viz === 'object' && 
+            viz.data && 
+            Array.isArray(viz.data) && 
+            viz.data.length > 0
+          );
+          
+          // If we have valid visualizations, keep the array, otherwise set to null
+          parsedResponse.visualizations = validVizs.length > 0 ? validVizs : null;
+          
+          // Ensure type is set for each visualization
+          if (parsedResponse.visualizations) {
+            parsedResponse.visualizations.forEach((viz: any) => {
+              if (!viz.type) {
+                viz.type = "bar";
+              }
+            });
+          }
+        }
+        // If it's an object, validate it has required fields
+        else if (typeof parsedResponse.visualizations === 'object') {
+          if (!parsedResponse.visualizations.data || !Array.isArray(parsedResponse.visualizations.data) || parsedResponse.visualizations.data.length === 0) {
+            parsedResponse.visualizations = null;
+          } else {
+            // Ensure type is set
+            if (!parsedResponse.visualizations.type) {
+              parsedResponse.visualizations.type = "bar";
+            }
+          }
+        } else {
+          parsedResponse.visualizations = null;
+        }
+      } else {
         parsedResponse.visualizations = null;
       }
       
     } catch (parseError) {
-      console.error("Failed to parse AI response as JSON:", responseText);
+      console.error("Failed to parse AI response as JSON");
+      console.error("Response text:", responseText);
       console.error("Parse error:", parseError);
+      console.error("Response text length:", responseText?.length);
+      console.error("Response text preview:", responseText?.substring(0, 500));
       
       // Fallback: return the raw text as answer with basic structure
       parsedResponse = {
-        answer: responseText + "\n\n(Note: The response could not be parsed as structured JSON, but the analysis is provided above.)",
+        answer: responseText || "I apologize, but I encountered an issue processing your question. Please try rephrasing it.",
         citations: datasets.map((ds: Dataset) => ({
           dataset: ds.name,
           source: "Referenced in analysis"
@@ -233,33 +321,64 @@ Analyze the datasets and provide your response as valid JSON only (no markdown, 
       };
     }
 
-    // Store the message
-    await supabase.from("chat_messages").insert([
-      {
-        session_id: sessionId,
-        role: "user",
-        content: question,
-      },
-      {
-        session_id: sessionId,
-        role: "assistant",
-        content: parsedResponse.answer,
-        citations: parsedResponse.citations || [],
-        visualizations: parsedResponse.visualizations || null,
-      },
-    ]);
+    // Final validation - ensure answer is always present
+    if (!parsedResponse || !parsedResponse.answer || typeof parsedResponse.answer !== 'string') {
+      console.error("Invalid parsedResponse structure. parsedResponse:", JSON.stringify(parsedResponse, null, 2));
+      console.error("Response text was:", responseText?.substring(0, 1000));
+      parsedResponse = {
+        answer: "I apologize, but I encountered an issue processing your question. Please try rephrasing it or ask a different question.",
+        citations: [],
+        visualizations: null,
+      };
+    }
+    
+    // Ensure answer is not empty
+    if (!parsedResponse.answer || parsedResponse.answer.trim().length === 0) {
+      console.error("Answer is empty after parsing. parsedResponse:", JSON.stringify(parsedResponse, null, 2));
+      parsedResponse.answer = "I apologize, but I couldn't generate a response. The AI service may be temporarily unavailable. Please try again in a moment.";
+    }
+
+    // Ensure citations is an array
+    if (!Array.isArray(parsedResponse.citations)) {
+      parsedResponse.citations = [];
+    }
+
+    // Store the message (don't let DB errors break the response)
+    try {
+      await supabase.from("chat_messages").insert([
+        {
+          session_id: sessionId,
+          role: "user",
+          content: question,
+        },
+        {
+          session_id: sessionId,
+          role: "assistant",
+          content: parsedResponse.answer,
+          citations: parsedResponse.citations || [],
+          visualizations: parsedResponse.visualizations || null,
+        },
+      ]);
+    } catch (dbError) {
+      console.error("Error storing message in DB:", dbError);
+      // Continue even if DB write fails
+    }
 
     return new Response(JSON.stringify(parsedResponse), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
     console.error("Error in query-data function:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+    
     return new Response(
       JSON.stringify({
-        error: error instanceof Error ? error.message : "Unknown error occurred",
+        answer: `I apologize, but I encountered an error while processing your question: ${errorMessage}. Please try rephrasing your question or ask something else.`,
+        citations: [],
+        visualizations: null,
       }),
       {
-        status: 500,
+        status: 200, // Return 200 so frontend doesn't treat it as a network error
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );

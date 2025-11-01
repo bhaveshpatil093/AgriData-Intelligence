@@ -25,9 +25,32 @@ interface DataVisualizationProps {
 
 export const DataVisualization = ({ data }: DataVisualizationProps) => {
   // Safety checks
-  if (!data || !data.data || !Array.isArray(data.data) || data.data.length === 0) {
+  if (!data) {
+    console.warn("DataVisualization: No data provided");
     return null;
   }
+
+  // Ensure data.data exists and is an array
+  if (!data.data || !Array.isArray(data.data) || data.data.length === 0) {
+    console.warn("DataVisualization: Invalid or empty data array", data);
+    return null;
+  }
+
+  // Ensure data.type is valid
+  if (data.type && !["bar", "line", "table"].includes(data.type)) {
+    console.warn("DataVisualization: Invalid type", data.type);
+    return null;
+  }
+
+  // Debug logging
+  console.log("DataVisualization rendering:", {
+    type: data.type,
+    title: data.title,
+    dataLength: data.data.length,
+    xKey: data.xKey,
+    yKey: data.yKey,
+    firstRow: data.data[0],
+  });
 
   if (data.type === "table") {
     const firstRow = data.data[0];
@@ -73,9 +96,36 @@ export const DataVisualization = ({ data }: DataVisualizationProps) => {
     );
   }
 
-  // Determine chart configuration
-  const xKey = data.xKey || "name";
-  const hasMultipleSeries = data.series && data.series.length > 0;
+  // Determine chart configuration with fallbacks
+  const type = data.type || "bar";
+  
+  // Determine xKey - try common field names
+  const firstDataPoint = data.data[0];
+  const possibleXKeys = data.xKey 
+    ? [data.xKey]
+    : firstDataPoint 
+      ? Object.keys(firstDataPoint).filter(k => 
+          ["name", "State", "District", "Year", "Crop", "label"].includes(k) ||
+          typeof firstDataPoint[k] === "string"
+        )
+      : ["name"];
+  const xKey = possibleXKeys[0] || "name";
+
+  // Determine yKey - numeric fields (handle spaces and special characters)
+  const possibleYKeys = data.yKey
+    ? [data.yKey]
+    : firstDataPoint
+      ? Object.keys(firstDataPoint).filter(k => 
+          typeof firstDataPoint[k] === "number" && 
+          !["Year"].includes(k)
+        )
+      : ["value"];
+  
+  // Use the provided yKey if it exists, otherwise use the first numeric field
+  const yKey = (data.yKey && firstDataPoint && firstDataPoint[data.yKey] !== undefined)
+    ? data.yKey
+    : (possibleYKeys[0] || "value");
+  const hasMultipleSeries = data.series && Array.isArray(data.series) && data.series.length > 0;
 
   return (
     <Card className="mt-4 border-2 border-border/50 shadow-lg bg-card border-border">
@@ -83,8 +133,8 @@ export const DataVisualization = ({ data }: DataVisualizationProps) => {
         <CardTitle className="text-base sm:text-lg font-semibold">{data.title || "Data Visualization"}</CardTitle>
       </CardHeader>
       <CardContent className="overflow-x-auto">
-        <ResponsiveContainer width="100%" height={300} minHeight={250}>
-          {data.type === "bar" ? (
+        <ResponsiveContainer width="100%" height={350} minHeight={250}>
+          {type === "bar" ? (
             <BarChart data={data.data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis 
@@ -107,9 +157,9 @@ export const DataVisualization = ({ data }: DataVisualizationProps) => {
                 ))
               ) : (
                 <Bar 
-                  dataKey={data.yKey || "value"} 
+                  dataKey={yKey}
                   fill="hsl(var(--chart-1))" 
-                  name={data.yKey || "value"}
+                  name={yKey}
                 />
               )}
             </BarChart>
@@ -139,10 +189,10 @@ export const DataVisualization = ({ data }: DataVisualizationProps) => {
               ) : (
                 <Line
                   type="monotone"
-                  dataKey={data.yKey || "value"}
+                  dataKey={yKey}
                   stroke="hsl(var(--chart-1))"
                   strokeWidth={2}
-                  name={data.yKey || "value"}
+                  name={yKey}
                 />
               )}
             </LineChart>

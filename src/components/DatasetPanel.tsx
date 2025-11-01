@@ -263,50 +263,50 @@ export const DatasetPanel = () => {
                         </div>
                       </div>
 
-                        {displayData.length > 0 ? (
-                          <div className="border rounded-lg overflow-hidden">
-                            <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
-                              <Table>
-                                <TableHeader className="sticky top-0 bg-muted/50">
-                                  <TableRow>
+                      {displayData.length > 0 ? (
+                        <div className="border rounded-lg overflow-hidden">
+                          <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+                            <Table>
+                              <TableHeader className="sticky top-0 bg-muted/50">
+                                <TableRow>
+                                  {fieldKeys.map((field) => (
+                                    <TableHead 
+                                      key={field}
+                                      className="font-semibold text-xs sm:text-sm whitespace-nowrap"
+                                    >
+                                      {field}
+                                    </TableHead>
+                                  ))}
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {displayData.map((row: any, index: number) => (
+                                  <TableRow 
+                                    key={index}
+                                    className="hover:bg-muted/30 transition-colors"
+                                  >
                                     {fieldKeys.map((field) => (
-                                      <TableHead 
+                                      <TableCell 
                                         key={field}
-                                        className="font-semibold text-xs sm:text-sm whitespace-nowrap"
+                                        className="text-xs sm:text-sm whitespace-nowrap"
                                       >
-                                        {field}
-                                      </TableHead>
+                                        {row[field] !== null && row[field] !== undefined 
+                                          ? String(row[field])
+                                          : "-"
+                                        }
+                                      </TableCell>
                                     ))}
                                   </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {displayData.map((row: any, index: number) => (
-                                    <TableRow 
-                                      key={index}
-                                      className="hover:bg-muted/30 transition-colors"
-                                    >
-                                      {fieldKeys.map((field) => (
-                                        <TableCell 
-                                          key={field}
-                                          className="text-xs sm:text-sm whitespace-nowrap"
-                                        >
-                                          {row[field] !== null && row[field] !== undefined 
-                                            ? String(row[field])
-                                            : "-"
-                                          }
-                                        </TableCell>
-                                      ))}
-                                    </TableRow>
-                                  ))}
-                                </TableBody>
-                              </Table>
-                            </div>
+                                ))}
+                              </TableBody>
+                            </Table>
                           </div>
-                        ) : (
-                          <div className="text-center py-8 text-muted-foreground">
-                            <p>No data found matching your search.</p>
-                          </div>
-                        )}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <p>No data found matching your search.</p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </CardContent>
