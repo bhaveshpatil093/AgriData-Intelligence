@@ -24,19 +24,29 @@ interface DataVisualizationProps {
 }
 
 export const DataVisualization = ({ data }: DataVisualizationProps) => {
+  // Safety checks
+  if (!data || !data.data || !Array.isArray(data.data) || data.data.length === 0) {
+    return null;
+  }
+
   if (data.type === "table") {
+    const firstRow = data.data[0];
+    if (!firstRow || typeof firstRow !== "object") {
+      return null;
+    }
+
     return (
-      <Card className="mt-4">
-        <CardHeader>
-          <CardTitle className="text-lg">{data.title}</CardTitle>
+      <Card className="mt-4 border-2 border-border/50 shadow-lg bg-card/50 backdrop-blur-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg font-semibold">{data.title || "Data Table"}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto rounded-lg border border-border/30">
+            <table className="w-full text-sm border-collapse">
               <thead>
-                <tr className="border-b">
-                  {Object.keys(data.data[0] || {}).map((key) => (
-                    <th key={key} className="text-left p-2 font-semibold">
+                <tr className="border-b bg-gradient-to-r from-muted/50 to-muted/30">
+                  {Object.keys(firstRow).map((key) => (
+                    <th key={key} className="text-left p-3 font-semibold text-foreground">
                       {key}
                     </th>
                   ))}
@@ -44,10 +54,13 @@ export const DataVisualization = ({ data }: DataVisualizationProps) => {
               </thead>
               <tbody>
                 {data.data.map((row, index) => (
-                  <tr key={index} className="border-b">
-                    {Object.values(row).map((value: any, i) => (
-                      <td key={i} className="p-2">
-                        {value}
+                  <tr 
+                    key={index} 
+                    className="border-b hover:bg-primary/5 transition-colors even:bg-muted/20"
+                  >
+                    {Object.keys(firstRow).map((key) => (
+                      <td key={key} className="p-3">
+                        {row[key] !== undefined && row[key] !== null ? String(row[key]) : "-"}
                       </td>
                     ))}
                   </tr>
@@ -60,49 +73,76 @@ export const DataVisualization = ({ data }: DataVisualizationProps) => {
     );
   }
 
+  // Determine chart configuration
+  const xKey = data.xKey || "name";
+  const hasMultipleSeries = data.series && data.series.length > 0;
+
   return (
-    <Card className="mt-4">
-      <CardHeader>
-        <CardTitle className="text-lg">{data.title}</CardTitle>
+    <Card className="mt-4 border-2 border-border/50 shadow-lg bg-card border-border">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base sm:text-lg font-semibold">{data.title || "Data Visualization"}</CardTitle>
       </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
+      <CardContent className="overflow-x-auto">
+        <ResponsiveContainer width="100%" height={300} minHeight={250}>
           {data.type === "bar" ? (
-            <BarChart data={data.data}>
+            <BarChart data={data.data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey={data.xKey || "name"} />
+              <XAxis 
+                dataKey={xKey} 
+                angle={-45}
+                textAnchor="end"
+                height={80}
+              />
               <YAxis />
               <Tooltip />
               <Legend />
-              {data.series?.map((key, index) => (
-                <Bar
-                  key={key}
-                  dataKey={key}
-                  fill={`hsl(var(--chart-${(index % 5) + 1}))`}
+              {hasMultipleSeries ? (
+                data.series!.map((key, index) => (
+                  <Bar
+                    key={key}
+                    dataKey={key}
+                    fill={`hsl(var(--chart-${(index % 5) + 1}))`}
+                    name={key}
+                  />
+                ))
+              ) : (
+                <Bar 
+                  dataKey={data.yKey || "value"} 
+                  fill="hsl(var(--chart-1))" 
+                  name={data.yKey || "value"}
                 />
-              )) || <Bar dataKey={data.yKey || "value"} fill="hsl(var(--chart-1))" />}
+              )}
             </BarChart>
           ) : (
-            <LineChart data={data.data}>
+            <LineChart data={data.data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey={data.xKey || "name"} />
+              <XAxis 
+                dataKey={xKey}
+                angle={-45}
+                textAnchor="end"
+                height={80}
+              />
               <YAxis />
               <Tooltip />
               <Legend />
-              {data.series?.map((key, index) => (
-                <Line
-                  key={key}
-                  type="monotone"
-                  dataKey={key}
-                  stroke={`hsl(var(--chart-${(index % 5) + 1}))`}
-                  strokeWidth={2}
-                />
-              )) || (
+              {hasMultipleSeries ? (
+                data.series!.map((key, index) => (
+                  <Line
+                    key={key}
+                    type="monotone"
+                    dataKey={key}
+                    stroke={`hsl(var(--chart-${(index % 5) + 1}))`}
+                    strokeWidth={2}
+                    name={key}
+                  />
+                ))
+              ) : (
                 <Line
                   type="monotone"
                   dataKey={data.yKey || "value"}
                   stroke="hsl(var(--chart-1))"
                   strokeWidth={2}
+                  name={data.yKey || "value"}
                 />
               )}
             </LineChart>

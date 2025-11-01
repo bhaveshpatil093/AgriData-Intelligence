@@ -110,15 +110,23 @@ All colors MUST be HSL.
 
 @layer utilities {
   .gradient-primary {
-    background: var(--gradient-primary);
+    background: linear-gradient(135deg, hsl(184 75% 35%), hsl(184 65% 50%));
+  }
+  
+  .bg-gradient-primary {
+    background: linear-gradient(135deg, hsl(184 75% 35%), hsl(184 65% 50%));
   }
   
   .gradient-secondary {
-    background: var(--gradient-secondary);
+    background: linear-gradient(135deg, hsl(28 80% 55%), hsl(28 70% 65%));
+  }
+  
+  .bg-gradient-secondary {
+    background: linear-gradient(135deg, hsl(28 80% 55%), hsl(28 70% 65%));
   }
   
   .gradient-subtle {
-    background: var(--gradient-subtle);
+    background: linear-gradient(180deg, hsl(210 40% 98%), hsl(210 30% 96%));
   }
   
   .transition-smooth {
